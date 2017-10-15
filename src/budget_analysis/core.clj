@@ -24,9 +24,11 @@
                                             [:amount "decimal(12, 2)"]
                                             [:account "varchar(255)"])))
 
+(def num-format (java.text.NumberFormat/getInstance java.util.Locale/US))
+
 (def parse-transforms
   {:transdate #(parse-local-date (formatter "MM/dd/yyyy") %)
-   :amount #(Double/parseDouble %)})
+   :amount #(double (.parse num-format %))})
 
 (def deserialize-transforms
   {:transdate parse-local-date
@@ -119,11 +121,6 @@
            (map #(rename-keys % col-map))
            (map #(evolve parse-transforms %))))))
 
-(defn ingest-csv
-  "imports a csv and saves it to the database"
-  [filename col-map]
-  (add-transactions (import-csv filename col-map)))
-
 (def ts (import-csv "data/Activity.CSV" chase-col-map))
 
 (defn add-transactions [ts]
@@ -131,8 +128,13 @@
     (if (not (nil? (first new-ts))) 
       (apply sql/insert! db :transactions new-ts))))
 
-(defn detect-same-test [filename]
-  (insert-test filename)
+(defn ingest-csv
+  "imports a csv and saves it to the database"
+  [filename col-map]
+  (add-transactions (import-csv filename col-map)))
+
+(defn detect-same-test [filename col-map]
+  (ingest-csv filename col-map)
   (let [from-file (first (import-csv filename chase-col-map))
         from-db (evolve deserialize-transforms 
                         (first (sql/query db "select * from transactions")))]
